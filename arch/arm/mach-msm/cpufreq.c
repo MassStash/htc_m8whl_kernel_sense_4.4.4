@@ -604,6 +604,26 @@ int use_for_scaling(unsigned int freq)
 }
 #endif
 
+#ifdef CONFIG_MSM_CPU_VOLTAGE_CONTROL
+int use_for_scaling(unsigned int freq)
+{
+	unsigned int i, cpu_freq;
+
+	if (!krait_freq_table)
+		return -EINVAL;
+
+	for (i = 0; krait_freq_table[i].frequency != CPUFREQ_TABLE_END; i++) {
+		cpu_freq = krait_freq_table[i].frequency;
+		if (cpu_freq == CPUFREQ_ENTRY_INVALID)
+			continue;
+		if (freq == cpu_freq)
+			return freq;
+	}
+
+	return -EINVAL;
+}
+#endif
+
 static int __init msm_cpufreq_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
