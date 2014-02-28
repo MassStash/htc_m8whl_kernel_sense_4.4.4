@@ -1128,7 +1128,7 @@ exit:
 	return ret;
 }
 
-static void __ref do_freq_control(long temp)
+static void do_freq_control(long temp)
 {
 	uint32_t cpu = 0;
 	uint32_t max_freq = cpus[cpu].limited_max_freq;
@@ -1170,7 +1170,7 @@ static void __ref do_freq_control(long temp)
 	put_online_cpus();
 }
 
-static void __ref check_temp(struct work_struct *work)
+static void check_temp(struct work_struct *work)
 {
 	static int limit_init;
 	long temp = 0;
@@ -1182,6 +1182,11 @@ static void __ref check_temp(struct work_struct *work)
 				msm_thermal_info.sensor_id);
 		goto reschedule;
 	}
+
+	do_core_control(temp);
+	do_psm();
+	do_ocr();
+
 	if (!limit_init) {
 		ret = msm_thermal_get_freq_table();
 		if (ret)
@@ -1190,10 +1195,7 @@ static void __ref check_temp(struct work_struct *work)
 			limit_init = 1;
 	}
 
-	do_core_control(temp);
 	do_vdd_restriction();
-	do_psm();
-	do_ocr();
 	do_freq_control(temp);
 
 reschedule:
