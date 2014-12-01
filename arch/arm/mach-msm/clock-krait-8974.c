@@ -708,44 +708,6 @@ static void krait_update_uv(int *uv, int num, int boost_uv)
 	}
 }
 
-	switch (arg_vdd_uv) {
-
-	if (speed == 3 && arg_cpu_oc <= 2457600) {
-		printk("elementalx: uv=%d freq=%lu ua=%d\n", uv[num-1], freq[num-1]/1000, ua[num-1]);
-		return;
-	}
-
-	freq[num-1] = arg_cpu_oc*1000;
-
-	switch (arg_cpu_oc) {
-
-	case 2342400:
-		ua[num-1] = 751;
-		uv[num-1] = min(1200000, uv[num-1] + 15000);
-		break;
-	case 2457600:
-		ua[num-1] = 802;
-		uv[num-1] = min(1200000, uv[num-1] + 35000);
-		break;
-	case 2572800:
-		ua[num-1] = 831;
-		uv[num-1] = min(1200000, uv[num-1] + 50000);
-		break;
-	case 2649600:
-		ua[num-1] = 866;
-		uv[num-1] = min(1200000, uv[num-1] + 65000);
-		break;
-	case 2726400:
-		ua[num-1] = 900;
-		uv[num-1] = min(1200000, uv[num-1] + 80000);
-		break;
-	case 2803200:
-		ua[num-1] = 937;
-		uv[num-1] = min(1200000, uv[num-1] + 95000);
-		break;
-	}
-}
-
 static char table_name[] = "qcom,speedXX-pvsXX-bin-vXX";
 module_param_string(table_name, table_name, sizeof(table_name), S_IRUGO);
 static unsigned int pvs_config_ver;
@@ -1055,7 +1017,7 @@ static int __init clock_krait_8974_init(void)
 {
 	return platform_driver_register(&clock_krait_8974_driver);
 }
-arch_initcall(clock_krait_8974_init);
+module_init(clock_krait_8974_init);
 
 static void __exit clock_krait_8974_exit(void)
 {

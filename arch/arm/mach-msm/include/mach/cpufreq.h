@@ -17,14 +17,16 @@
 extern int devfreq_msm_cpufreq_update_bw(void);
 extern int register_devfreq_msm_cpufreq(void);
 #else
+/* Compiler kiks out defined but not used, so let's comment out
 static int devfreq_msm_cpufreq_update_bw(void)
 {
 	return 0;
 }
+ Compiler kiks out defined but not used, so let's comment out
 static int register_devfreq_msm_cpufreq(void)
 {
 	return 0;
-}
+}*/
 #endif
 
 #if defined(CONFIG_CPU_FREQ_MSM)

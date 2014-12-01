@@ -41,11 +41,11 @@ static DEFINE_MUTEX(l2bw_lock);
 
 static struct clk *cpu_clk[NR_CPUS];
 static struct clk *l2_clk;
+static DEFINE_PER_CPU(struct cpufreq_frequency_table *, freq_table);
+static bool hotplug_ready;
 #ifdef CONFIG_MSM_CPU_VOLTAGE_CONTROL
 static struct cpufreq_frequency_table *krait_freq_table;
 #endif
-static DEFINE_PER_CPU(struct cpufreq_frequency_table *, freq_table);
-static bool hotplug_ready;
 
 /* maxscroff */
 uint32_t maxscroff_freq = 1190400;
@@ -121,20 +121,6 @@ static int set_cpu_freq(struct cpufreq_policy *policy, unsigned int new_freq,
 
 	trace_cpu_frequency_switch_start(freqs.old, freqs.new, policy->cpu);
 
-#ifdef CONFIG_HTC_DEBUG_FOOTPRINT
-		set_acpuclk_footprint(policy->cpu, ACPU_ENTER);
-		set_acpuclk_cpu_freq_footprint(FT_PREV_RATE, policy->cpu, policy->cur * 1000);
-		set_acpuclk_cpu_freq_footprint(FT_NEW_RATE, policy->cpu, rate);
-#endif
-
-#ifdef CONFIG_HTC_DEBUG_FOOTPRINT
-			set_acpuclk_footprint(policy->cpu, ACPU_BEFORE_UPDATE_L2_BW);
-#endif
-
-#ifdef CONFIG_HTC_DEBUG_FOOTPRINT
-		set_acpuclk_footprint(policy->cpu, ACPU_LEAVE);
-#endif
-
 	rate = new_freq * 1000;
 	rate = clk_round_rate(cpu_clk[policy->cpu], rate);
 	ret = clk_set_rate(cpu_clk[policy->cpu], rate);
@@ -143,7 +129,7 @@ static int set_cpu_freq(struct cpufreq_policy *policy, unsigned int new_freq,
 		trace_cpu_frequency_switch_end(policy->cpu);
 	}
 
-	
+	/* Restore priority after clock ramp-up */
 	if (freqs.new > freqs.old && saved_sched_policy >= 0) {
 		param.sched_priority = saved_sched_rt_prio;
 		sched_setscheduler_nocheck(current, saved_sched_policy, &param);
@@ -201,6 +187,67 @@ static unsigned int msm_cpufreq_get_freq(unsigned int cpu)
 {
 	return clk_get_rate(cpu_clk[cpu]) / 1000;
 }
+
+static inline int msm_cpufreq_limits_init(void)
+{
+	int cpu = 0;
+	int i = 0;
+	struct cpufreq_frequency_table *table = NULL;
+	uint32_t min = (uint32_t) -1;
+	uint32_t max = 0;
+	struct cpu_freq *limit = NULL;
+
+	for_each_possible_cpu(cpu) {
+		limit = &per_cpu(cpu_freq_info, cpu);
+		table = cpufreq_frequency_get_table(cpu);
+		if (table == NULL) {
+			pr_err("%s: error reading cpufreq table for cpu %d\n",
+					__func__, cpu);
+			continue;
+		}
+		for (i = 0; (table[i].frequency != CPUFREQ_TABLE_END); i++) {
+			if (table[i].frequency > max)
+				max = table[i].frequency;
+			if (table[i].frequency < min)
+				min = table[i].frequency;
+		}
+		limit->allowed_min = min;
+		limit->allowed_max = max;
+		limit->min = min;
+		limit->max = max;
+		limit->limits_init = 1;
+	}
+
+	return 0;
+}
+
+int msm_cpufreq_set_freq_limits(uint32_t cpu, uint32_t min, uint32_t max)
+{
+	struct cpu_freq *limit = &per_cpu(cpu_freq_info, cpu);
+
+	if (!limit->limits_init)
+		msm_cpufreq_limits_init();
+
+	if ((min != MSM_CPUFREQ_NO_LIMIT) &&
+		min >= limit->min && min <= limit->max)
+		limit->allowed_min = min;
+	else
+		limit->allowed_min = limit->min;
+
+
+	if ((max != MSM_CPUFREQ_NO_LIMIT) &&
+		max <= limit->max && max >= limit->min)
+		limit->allowed_max = max;
+	else
+		limit->allowed_max = limit->max;
+
+	pr_debug("%s: Limiting cpu %d min = %d, max = %d\n",
+			__func__, cpu,
+			limit->allowed_min, limit->allowed_max);
+
+	return 0;
+}
+EXPORT_SYMBOL(msm_cpufreq_set_freq_limits);
 
 static int msm_cpufreq_init(struct cpufreq_policy *policy)
 {
@@ -266,6 +313,10 @@ static int msm_cpufreq_cpu_callback(struct notifier_block *nfb,
 		clk_disable(cpu_clk[cpu]);
 		clk_disable(l2_clk);
 		break;
+	/*
+	 * Scale down clock/power of CPU that is dead and scale it back up
+	 * before the CPU is brought up.
+	 */
 	case CPU_DEAD:
 		clk_unprepare(cpu_clk[cpu]);
 		clk_unprepare(l2_clk);
@@ -487,7 +538,7 @@ static struct freq_attr *msm_freq_attr[] = {
 };
 
 static struct cpufreq_driver msm_cpufreq_driver = {
-	
+	/* lps calculations are handled here. */
 	.flags		= CPUFREQ_STICKY | CPUFREQ_CONST_LOOPS,
 	.init		= msm_cpufreq_init,
 	.verify		= msm_cpufreq_verify,
@@ -569,12 +620,13 @@ static struct cpufreq_frequency_table *cpufreq_parse_dt(struct device *dev,
 	krait_freq_table = devm_kzalloc(dev, (nf + 1) * sizeof(*krait_freq_table),
 					GFP_KERNEL);
 	if (!krait_freq_table)
-		return -ENOMEM;
+		return ERR_PTR(-ENOMEM);
 
-	*krait_freq_table = *freq_table;
+	*krait_freq_table = *ftbl;
 
-	for (i = 0, j = 0; i < nf; i++, j += 3)
-		krait_freq_table[i].frequency = data[j];
+	for (i = 0; i < nf; i++)
+		krait_freq_table[i].frequency = data[i];
+
 	krait_freq_table[i].frequency = CPUFREQ_TABLE_END;
 #endif
 
@@ -582,27 +634,6 @@ static struct cpufreq_frequency_table *cpufreq_parse_dt(struct device *dev,
 
 	return ftbl;
 }
-
-
-#ifdef CONFIG_MSM_CPU_VOLTAGE_CONTROL
-int use_for_scaling(unsigned int freq)
-{
-	unsigned int i, cpu_freq;
-
-	if (!krait_freq_table)
-		return -EINVAL;
-
-	for (i = 0; krait_freq_table[i].frequency != CPUFREQ_TABLE_END; i++) {
-		cpu_freq = krait_freq_table[i].frequency;
-		if (cpu_freq == CPUFREQ_ENTRY_INVALID)
-			continue;
-		if (freq == cpu_freq)
-			return freq;
-	}
-
-	return -EINVAL;
-}
-#endif
 
 #ifdef CONFIG_MSM_CPU_VOLTAGE_CONTROL
 int use_for_scaling(unsigned int freq)
