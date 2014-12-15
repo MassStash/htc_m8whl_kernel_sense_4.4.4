@@ -13,8 +13,8 @@ toolchainDir="/home/zaichron-lin/AndroidDev/AAtoolchains/linaro_toolchains_2014/
 #Path where you would like the kernel to be outputed
 exportDir="/home/zaichron-lin/Desktop/Copy/AndroidDev/Kernz/m8whl/out" #( Example /home/user/Desktop )
 #Change default to what ever you like
-kernel1name="MassStashedX-FlarPort-2.00-4.4.4"
-kernel2name="MassStashedX-FlarPort-2.00-4.4.4"
+kernel1name="FlarPort-m8-2.00-Sense"
+kernel2name="FlarPort-m8-2.xx-Sense"
 kernel3name="Default-3"
 #Do not edit
 now=$(date +"%m-%d-%Y-%H-%M")
@@ -93,43 +93,23 @@ echo " Compiling dt.img brah "
 
 echo
 echo
-echo " Now the kernel is going to get packaged in a flashable zip yo"
-
-echo
-echo
-#mkdir zip2
-#mkdir zip2/kernel
-#mkdir zip2/modules
-#cp arch/arm/boot/zImage zip2/kernel/
-
 echo
 echo
 echo " Moved zImage "
-cp arch/arm/boot/zImage ~/AndroidDev/AAmkbootimg_tools/venom
-#cp arch/arm/boot/dt.img zip2/kernel/
+cp arch/arm/boot/zImage /home/zaichron-lin/Desktop/Copy/AndroidDev/Kernz/m8/ElementalX-Sense-4.4.4
+
 
 echo
 echo
 echo " Moved dt.img "
-cp arch/arm/boot/dt.img ~/AndroidDev/AAmkbootimg_tools/venom
+cp arch/arm/boot/dt.img /home/zaichron-lin/Desktop/Copy/AndroidDev/Kernz/m8/ElementalX-Sense-4.4.4/dtb
 
 echo
 echo
 echo " Moving modules "
-find -iname *.ko | xargs cp -t /home/zaichron-lin/Desktop/Copy/AndroidDev/Kernz/m8whl/MassStashedX-FlarPort-Sense-4.4.4/system/lib/modules
-cd ~/AndroidDev/AAmkbootimg_tools
+find -iname *.ko | xargs cp -t /home/zaichron-lin/Desktop/Copy/AndroidDev/Kernz/m8/ElementalX-Sense-4.4.4/system/lib/modules
 
-echo
-echo
-echo " Making a boot.img ya'll "
-./mkboot venom boot.img
-
-echo
-echo
-echo " Moved boot.img "
-cp boot.img /home/zaichron-lin/Desktop/Copy/AndroidDev/Kernz/m8whl/MassStashedX-FlarPort-Sense-4.4.4/boot
-
-cd /home/zaichron-lin/Desktop/Copy/AndroidDev/Kernz/m8whl/MassStashedX-FlarPort-Sense-4.4.4
+cd /home/zaichron-lin/Desktop/Copy/AndroidDev/Kernz/m8/ElementalX-Sense-4.4.4
 
 echo
 echo
@@ -144,4 +124,3 @@ echo
 echo
 echo " Check $exportDir for $kernelName-$now.zip and repeat "
 sleep 10
-./build
